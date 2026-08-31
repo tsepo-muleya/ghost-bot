@@ -1,3 +1,10 @@
+const express = require('express');
+const app = express();
+app.get('/', (req,res)=> res.send('Ghost Bot Alive'));
+app.listen(process.env.PORT || 8000);
+
+
+
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys")
 const pino = require("pino")
 const fs = require("fs")
