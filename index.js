@@ -1,17 +1,11 @@
-const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys")
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys")
 const pino = require("pino")
 const fs = require("fs")
 
-// PUT YOUR NUMBER HERE - with country code, NO +
-// Example: Zimbabwe 263771234567
-const MY_NUMBER = "263776752205"
+const MY_NUMBER = "263776752205" // <-- CHANGE THIS TO YOUR NUMBER
 
 async function startBot() {
-    // Create session folder if not exists
-    if (!fs.existsSync("./session")) {
-        fs.mkdirSync("./session")
-    }
-
+    if (!fs.existsSync("./session")) fs.mkdirSync("./session")
     const { state, saveCreds } = await useMultiFileAuthState("./session")
 
     const sock = makeWASocket({
@@ -23,65 +17,43 @@ async function startBot() {
 
     sock.ev.on("creds.update", saveCreds)
 
-    // PAIRING CODE - if not registered
     if (!state.creds.registered) {
-        console.log("Waiting 5 sec to generate pairing code...")
+        console.log("Waiting...")
         setTimeout(async () => {
             try {
                 let code = await sock.requestPairingCode(MY_NUMBER)
-                console.log("\n=================================")
-                console.log("YOUR PAIRING CODE: " + code)
-                console.log("Go to WhatsApp > Linked Devices > Link with phone number")
-                console.log("=================================\n")
-            } catch (e) {
-                console.log("Error getting code:", e)
-            }
+                console.log("\n=== YOUR CODE: " + code + " ===\n")
+            } catch (e) { console.log(e) }
         }, 5000)
     }
 
-    sock.ev.on("connection.update", (update) => {
-        const { connection } = update
-        if (connection === "open") {
-            console.log("✅ GHOST BOT ONLINE - Always Online Active")
-        }
+    sock.ev.on("connection.update", (u) => {
+        const { connection, lastDisconnect } = u
+        if (connection === "open") console.log("✅ BOT ONLINE - Ghost Active")
         if (connection === "close") {
-            console.log("Connection closed, restarting...")
+            console.log("Closed, restarting...")
             startBot()
         }
     })
 
-    // === MAIN GHOST LOGIC ===
     sock.ev.on("messages.upsert", async ({ messages }) => {
         const msg = messages[0]
         if (!msg.message) return
-        if (msg.key.fromMe) return // don't react to own messages
-
+        if (msg.key.fromMe) return
         const jid = msg.key.remoteJid
-        if (jid === "status@broadcast") return // ignore status
+        if (jid === "status@broadcast") return
 
-        // 1. ALWAYS ONLINE GHOST - stay online
         await sock.sendPresenceUpdate("available", jid)
-
-        // 2. TYPING GHOST - show typing for 4 seconds
         await sock.sendPresenceUpdate("composing", jid)
-        await new Promise(resolve => setTimeout(resolve, 4000))
+        await new Promise(r => setTimeout(r, 4000))
         await sock.sendPresenceUpdate("paused", jid)
 
-        // 3. AUTO REACTER GHOST - react with random emoji
-        const emojis = ["❤️", "🔥", "😂", "👍", "🥺", "😎", "💀"]
-        const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)]
-
+        const emojis = ["❤️", "🔥", "😂", "👍", "🥺"]
+        const emoji = emojis[Math.floor(Math.random() * emojis.length)]
         try {
-            await sock.sendMessage(jid, {
-                react: {
-                    text: randomEmoji,
-                    key: msg.key
-                }
-            })
-            console.log(`Reacted ${randomEmoji} to message from ${jid}`)
-        } catch (e) {
-            console.log("Failed to react")
-        }
+            await sock.sendMessage(jid, { react: { text: emoji, key: msg.key } })
+            console.log("Reacted " + emoji)
+        } catch {}
     })
 }
 
